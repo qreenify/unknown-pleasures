@@ -119,8 +119,8 @@ Waves style:
 | `N_LINES` | 5 | one line per frequency band |
 | `BAND_LO`/`BAND_HI` | 85 / 3800 Hz | analysed voice range |
 | `AMP_MAX` | 38 px | tallest swing of the loudest band |
-| `NOISE_GATE_DB` | −46 dBFS | per-band gate (true dBFS amplitude) — raise (e.g. −40) if room hiss wiggles the lines, lower if quiet speech barely moves them |
-| `GATE_RANGE_DB` | 32 dB | gate..gate+range maps onto 0..1 swing |
+| `NOISE_GATE_DB` | −56 dBFS | per-band gate (true dBFS amplitude) — raise (e.g. −46) if room noise wiggles the lines, lower if quiet speech barely moves them |
+| `GATE_RANGE_DB` | 38 dB | gate..gate+range maps onto 0..1 swing |
 | `WAVE_PERIODS`/`WAVE_SPEED` | — | spatial periods / drift speed per line |
 | `EDGE_FLOOR` | 0.35 | swing kept at the panel edges (lines move full-width) |
 | `RELEASE` | 0.86 | decay per tick — lower = lines still faster after speech |

@@ -87,8 +87,8 @@ WAVE_PERIODS = [1.3, 1.9, 2.7, 3.6, 4.6]   # spatial periods across the width
 WAVE_SPEED = [1.6, 2.1, 2.7, 3.4, 4.2]     # phase speed (rad/s) per line when active
 EDGE_FLOOR = 0.35        # lines keep 35% of their swing at the very edges
 ATTACK, RELEASE = 1.0, 0.86   # band smoothing: instant up, ~exponential down
-NOISE_GATE_DB = -46.0    # per-band gate (true dBFS amplitude) so room hiss doesn't wiggle the lines
-GATE_RANGE_DB = 32.0     # gate..gate+range maps onto 0..1 swing
+NOISE_GATE_DB = -56.0    # per-band gate (true dBFS amplitude) so room hiss doesn't wiggle the lines
+GATE_RANGE_DB = 38.0     # gate..gate+range maps onto 0..1 swing
 MIC_RATE = 16000
 FFT_N = 1024             # 64 ms analysis window
 
@@ -207,7 +207,7 @@ class MicCapture:
             if db < NOISE_GATE_DB:
                 bands.append(0.0)
             else:
-                bands.append(min(1.0, ((db - NOISE_GATE_DB) / GATE_RANGE_DB) ** 0.7))
+                bands.append(min(1.0, ((db - NOISE_GATE_DB) / GATE_RANGE_DB) ** 0.55))
         return bands
 
 
