@@ -181,6 +181,11 @@ class MicCapture:
     def stop(self):
         if self.proc is not None:
             self.proc.terminate()
+            try:
+                self.proc.wait(timeout=0.5)  # reap; no zombie per dictation
+            except subprocess.TimeoutExpired:
+                self.proc.kill()
+                self.proc.wait()
             self.proc = None
         with self.lock:
             self.ring.clear()
