@@ -5,15 +5,18 @@ Why this exists (2026-10-26): whisper's own `translate` task is weak — on a te
 clip it turned "Vad betyder det?" into something only barely English, and Adam's
 verdict on real dictation was "the translation isn't great". So voxtype now
 transcribes with `translate = false` (accurate Swedish text) and this script does
-the translation with the local qwen3.6:35b-a3b on this box — measured 0.8 s warm
-for a sentence, and the output reads like a person wrote it:
+the translation.
 
-    "nä nu jävlar har plex kraschat igen, kolla loggarna och starta om containern"
- -> "Ah, fuck, Plex has crashed again. Check the logs and restart the container."
+Model (2026-10-26): google/translategemma-4b-it, resident on neo as
+`translategemma:4b`. It is a dedicated translation model — 3.1 GiB, so it sits
+in neo's 11 GB alongside the generalist instead of displacing it — and it is
+prompted exactly the way its own chat template does it (see TRANSLATE below).
+The generalist qwen3.5:9b it replaced measured fine on this path (8/8 clean,
+0.47-0.79 s), so this is a swap for size and specialisation, not for a bug.
 
-Nothing leaves the LAN: whisper.cpp runs on this box's GPU, the translation model on neo.
-English dictation never pays the model call — a cheap Swedish heuristic decides,
-and the common case (English) is a lowercase and return.
+Nothing leaves the LAN: whisper.cpp runs on this box's GPU, the translation model
+on neo. English dictation never pays the model call — a cheap Swedish heuristic
+decides, and the common case (English) is a lowercase and return.
 
 Contract: text on stdin, filtered text on stdout. voxtype falls back to the raw
 transcription on timeout or error, so every failure path here echoes input. A
@@ -28,23 +31,30 @@ import urllib.request
 
 # Translation runs on neo, never on this box. Adam's call 2026-10-26: no local
 # weights on the PC at all — the PC is a client and a GPU for whisper, not a model
-# host. neo's qwen3.5:9b answers in ~0.5-0.9 s over the LAN, which is fast enough
-# that a cloud round trip would buy nothing and cost privacy.
+# host. A 4B on neo answers well inside voxtype's 4 s budget over the LAN, so a
+# cloud round trip would buy nothing and cost privacy.
 HOST = "http://10.13.13.15:11434/api/chat"
-MODEL = "qwen3.5:9b"
+MODEL = "translategemma:4b"
 # No num_ctx pin on purpose: neo serves this model at its own OLLAMA_CONTEXT_LENGTH
 # and asking for a different window forces a full reload (measured: 3.9 s vs 0.9 s).
 # The pin was only ever needed on the PC, where KV cache competed with whisper.
-KEEP_ALIVE = "24h"
+# Adam wants this model resident, not cold-started per dictation (2026-10-26):
+# -1 means never unload, and a request-level value overrides the daemon default.
+KEEP_ALIVE = -1
 # Budget below voxtype's timeout_ms (4000): python start + request + parse.
 CALL_TIMEOUT_S = 3.2
 
-SYSTEM = (
-    "You translate Swedish speech transcripts into English. "
-    "Output only the English translation: no quotes, no commentary, no explanation. "
-    "Keep names, hostnames and technical terms as they are. "
-    "Keep the speaker's tone and profanity. Do not add words that are not there."
-)
+# TranslateGemma's chat template is prose, not a system prompt, and the model
+# takes no system role at all — its template maps system to user, which would
+# emit two user turns back to back. So the instruction rides in the one user
+# message, worded as the template words it. Extra rules ("keep hostnames") are
+# deliberately NOT bolted on: this is a specialised translator, and the phrasing
+# below is the one it was trained on.
+TRANSLATE = """You are a professional Swedish (sv) to English (en) translator. Your goal is to accurately convey the meaning and nuances of the original Swedish text while adhering to English grammar, vocabulary, and cultural sensitivities.
+Produce only the English translation, without any additional explanations or commentary. Please translate the following Swedish text into English:
+
+
+{text}"""
 
 # Swedish tells: the letters English does not use, plus high-frequency words that
 # survive ASR even when a speaker drops diacritics.
@@ -74,15 +84,8 @@ def translate(text: str) -> str | None:
             "think": False,
             "stream": False,
             "keep_alive": KEEP_ALIVE,
-            # Pin the context. Without it ollama serves the model at the box-wide
-            # OLLAMA_CONTEXT_LENGTH (65536 here), whose KV cache makes the 9B eat
-            # 7.5 GB of VRAM and starve whisper; 8192 measures 6.4 GB and leaves
-            # the ~2.9 GB whisper needs. Translation inputs are one sentence.
             "options": {"temperature": 0},
-            "messages": [
-                {"role": "system", "content": SYSTEM},
-                {"role": "user", "content": text},
-            ],
+            "messages": [{"role": "user", "content": TRANSLATE.format(text=text)}],
         }
     ).encode()
     req = urllib.request.Request(
