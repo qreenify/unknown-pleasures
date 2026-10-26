@@ -11,7 +11,7 @@ for a sentence, and the output reads like a person wrote it:
     "nä nu jävlar har plex kraschat igen, kolla loggarna och starta om containern"
  -> "Ah, fuck, Plex has crashed again. Check the logs and restart the container."
 
-Nothing leaves the LAN: whisper.cpp is local and the model runs on 127.0.0.1.
+Nothing leaves the LAN: whisper.cpp runs on this box's GPU, the translation model on neo.
 English dictation never pays the model call — a cheap Swedish heuristic decides,
 and the common case (English) is a lowercase and return.
 
@@ -26,9 +26,13 @@ import re
 import sys
 import urllib.request
 
-OLLAMA = "http://127.0.0.1:11434/api/chat"
-MODEL = "qwen3.6:35b-a3b"
-KEEP_ALIVE = "4h"
+# neo, not this box: the PC's 4080 now runs whisper large-v3-turbo, and a resident
+# ollama model there (10 GB for qwen3.6:35b-a3b) starves whisper's Vulkan buffers —
+# measured 2026-10-26: whisper aborts with ErrorOutOfDeviceMemory, which kills the
+# daemon mid-dictation. Translating on neo keeps the PC's VRAM for transcription.
+OLLAMA = "http://10.13.13.15:11434/api/chat"
+MODEL = "qwen3.5:9b"
+KEEP_ALIVE = "30m"
 # Budget below voxtype's timeout_ms (4000): python start + request + parse.
 CALL_TIMEOUT_S = 3.2
 
