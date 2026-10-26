@@ -26,15 +26,24 @@ import re
 import sys
 import urllib.request
 
-# neo, not this box: the PC's 4080 now runs whisper large-v3-turbo, and a resident
-# ollama model there (10 GB for qwen3.6:35b-a3b) starves whisper's Vulkan buffers —
-# measured 2026-10-26: whisper aborts with ErrorOutOfDeviceMemory, which kills the
-# daemon mid-dictation. Translating on neo keeps the PC's VRAM for transcription.
-OLLAMA = "http://10.13.13.15:11434/api/chat"
-MODEL = "qwen3.5:9b"
-KEEP_ALIVE = "30m"
-# Budget below voxtype's timeout_ms (4000): python start + request + parse.
-CALL_TIMEOUT_S = 3.2
+# Two hosts, in order: this box first (no LAN hop, ~0.5 s), neo as the fallback
+# when the PC's 9B is not resident or the PC is busy. Both are local machines, so
+# nothing leaves the LAN either way.
+#
+# Why a 9B and not the big local model: the 4080 now runs whisper large-v3-turbo
+# (~2.6 GB of model + buffers) and a resident qwen3.6:35b-a3b takes 8.8 GB, which
+# leaves no room — measured 2026-10-26, whisper aborts with
+# ErrorOutOfDeviceMemory and the daemon dies mid-dictation. A 9B (6.4 GB at 64K)
+# coexists, verified.
+HOSTS = (
+    ("http://127.0.0.1:11434/api/chat", "qwen3.5:9b"),
+    ("http://10.13.13.15:11434/api/chat", "qwen3.5:9b"),
+)
+# Long enough that repeated dictation never pays a reload, short enough that the
+# card is free again the next day.
+KEEP_ALIVE = "24h"
+# Per-host budget, below voxtype's timeout_ms (4000): python start + request + parse.
+CALL_TIMEOUT_S = 2.6
 
 SYSTEM = (
     "You translate Swedish speech transcripts into English. "
@@ -64,14 +73,18 @@ def looks_swedish(text: str) -> bool:
     return len({w for w in words if w in WORDS}) >= 3
 
 
-def translate(text: str) -> str | None:
+def _call(url: str, model: str, text: str) -> str | None:
     body = json.dumps(
         {
-            "model": MODEL,
+            "model": model,
             "think": False,
             "stream": False,
             "keep_alive": KEEP_ALIVE,
-            "options": {"temperature": 0},
+            # Pin the context. Without it ollama serves the model at the box-wide
+            # OLLAMA_CONTEXT_LENGTH (65536 here), whose KV cache makes the 9B eat
+            # 7.5 GB of VRAM and starve whisper; 8192 measures 6.4 GB and leaves
+            # the ~2.9 GB whisper needs. Translation inputs are one sentence.
+            "options": {"temperature": 0, "num_ctx": 8192},
             "messages": [
                 {"role": "system", "content": SYSTEM},
                 {"role": "user", "content": text},
@@ -79,7 +92,7 @@ def translate(text: str) -> str | None:
         }
     ).encode()
     req = urllib.request.Request(
-        OLLAMA, data=body, headers={"Content-Type": "application/json"}
+        url, data=body, headers={"Content-Type": "application/json"}
     )
     with urllib.request.urlopen(req, timeout=CALL_TIMEOUT_S) as res:
         payload = json.load(res)
@@ -87,6 +100,17 @@ def translate(text: str) -> str | None:
     # Reasoning-capable models can still emit a stray tag; keep the prose.
     out = re.sub(r"^```.*?\n|```$", "", out.strip(), flags=re.S).strip()
     return out or None
+
+
+def translate(text: str) -> str | None:
+    for url, model in HOSTS:
+        try:
+            out = _call(url, model, text)
+            if out:
+                return out
+        except Exception:
+            continue  # try the next host, then give up quietly
+    return None
 
 
 def main() -> int:
