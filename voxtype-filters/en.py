@@ -31,10 +31,13 @@ import urllib.request
 
 # Translation runs on neo, never on this box. Adam's call 2026-10-26: no local
 # weights on the PC at all — the PC is a client and a GPU for whisper, not a model
-# host. A 4B on neo answers well inside voxtype's 4 s budget over the LAN, so a
-# cloud round trip would buy nothing and cost privacy.
+# host. Model: gemma4:12b, which is the one model neo keeps resident (it also does
+# fiona's speech-to-text through Ollama's audio path), so a Swedish dictation never
+# pays a model swap. 0.53–0.99 s warm on the dictation set, inside voxtype's 4 s
+# budget. translategemma:4b is faster (0.26–0.48 s) and stays pulled, but it is not
+# resident — pointing here at it would evict gemma4:12b on every Swedish utterance.
 HOST = "http://10.13.13.15:11434/api/chat"
-MODEL = "translategemma:4b"
+MODEL = "gemma4:12b"
 # No num_ctx pin on purpose: neo serves this model at its own OLLAMA_CONTEXT_LENGTH
 # and asking for a different window forces a full reload (measured: 3.9 s vs 0.9 s).
 # The pin was only ever needed on the PC, where KV cache competed with whisper.
