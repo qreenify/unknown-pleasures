@@ -1,7 +1,7 @@
 # Status — unknown-pleasures
 
 **Started:** 2026-10-27
-**Phase:** next
+**Phase:** operating — voxtype.service live since 2026-07 (SUPER+W dictation, whisper large-v3-turbo on the 4080); the one open item is a decision on the gemma4:12b translation in en.py
 **Last touched:** 2026-10-27
 **Progress:** Working OSD with two renderers and the voxtype filter set; translation backend for en.py still unsettled after five 2026-10-26 commits.
 **Reviewed:** 2026-10-27
