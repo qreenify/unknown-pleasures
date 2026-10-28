@@ -36,14 +36,14 @@ import urllib.request
 # pays a model swap. 0.53–0.99 s warm on the dictation set, inside voxtype's 4 s
 # budget. translategemma:4b is faster (0.26–0.48 s) and stays pulled, but it is not
 # resident — pointing here at it would evict gemma4:12b on every Swedish utterance.
-HOST = "http://10.13.13.15:11434/api/chat"
-MODEL = "gemma4:12b"
+HOST = "http://10.13.13.20:11434/api/chat"
+MODEL = "deepseek-v4.1-flash:cloud"
 # No num_ctx pin on purpose: neo serves this model at its own OLLAMA_CONTEXT_LENGTH
 # and asking for a different window forces a full reload (measured: 3.9 s vs 0.9 s).
 # The pin was only ever needed on the PC, where KV cache competed with whisper.
 # Adam wants this model resident, not cold-started per dictation (2026-10-26):
 # -1 means never unload, and a request-level value overrides the daemon default.
-KEEP_ALIVE = -1
+KEEP_ALIVE = "10m"
 # Budget below voxtype's timeout_ms (4000): python start + request + parse.
 CALL_TIMEOUT_S = 3.2
 
