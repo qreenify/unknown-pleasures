@@ -31,19 +31,20 @@ import urllib.request
 
 # Translation runs on neo, never on this box. Adam's call 2026-10-26: no local
 # weights on the PC at all — the PC is a client and a GPU for whisper, not a model
-# host. Model: gemma4:12b, which is the one model neo keeps resident (it also does
-# fiona's speech-to-text through Ollama's audio path), so a Swedish dictation never
-# pays a model swap. 0.53–0.99 s warm on the dictation set, inside voxtype's 4 s
-# budget. translategemma:4b is faster (0.26–0.48 s) and stays pulled, but it is not
-# resident — pointing here at it would evict gemma4:12b on every Swedish utterance.
-HOST = "http://10.13.13.20:11434/api/chat"
-MODEL = "deepseek-v4.1-flash:cloud"
+# host. Back on neo 2026-10-28: the old resident (gemma4:12b) was a generalist kept
+# alive for fiona (now parked), and Ollama had copied its weights into host RAM on
+# top of the GPU copy (8.5 GB + 5.9 GB) under host memory pressure. translategemma:4b
+# is purpose-built for this: 2.93 GB, entirely in VRAM, runner RSS ~1 GB because it
+# loads mmapped, 0.48 s warm, 5.9 s for the one cold load after boot — preloaded at
+# boot by the ollama-warm-translategemma unit on neo.
+HOST = "http://10.13.13.15:11434/api/chat"
+MODEL = "translategemma:4b"
 # No num_ctx pin on purpose: neo serves this model at its own OLLAMA_CONTEXT_LENGTH
 # and asking for a different window forces a full reload (measured: 3.9 s vs 0.9 s).
 # The pin was only ever needed on the PC, where KV cache competed with whisper.
 # Adam wants this model resident, not cold-started per dictation (2026-10-26):
 # -1 means never unload, and a request-level value overrides the daemon default.
-KEEP_ALIVE = "10m"
+KEEP_ALIVE = -1
 # Budget below voxtype's timeout_ms (4000): python start + request + parse.
 CALL_TIMEOUT_S = 3.2
 
